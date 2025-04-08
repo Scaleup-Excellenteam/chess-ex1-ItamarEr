@@ -10,9 +10,12 @@
 #include <string>
 #include "Piece.h"
 
-
-
 using namespace std;
+
+/**
+ * ChessBoard class represents a chessboard and manages the pieces on it.
+ * It provides methods to check for valid moves, simulate moves, and manage turns.
+ */
 
 class ChessBoard {
     vector<vector<Piece*>> chessBoard;
