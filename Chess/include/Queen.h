@@ -5,12 +5,16 @@
 #ifndef QUEEN_H
 #define QUEEN_H
 
+#include "Piece.h"
 
-
-class Queen {
-
+/**
+ * Queen class representing a queen piece in chess.
+ */
+class Queen : public Piece {
+public:
+    Queen(int row, int col, bool is_white);
+    bool isValidMove(int target_row, int target_col) override;
 };
-
 
 
 #endif //QUEEN_H
