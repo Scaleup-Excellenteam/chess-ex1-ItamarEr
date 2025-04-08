@@ -7,6 +7,9 @@
 
 #include "Piece.h"
 
+/**
+ * Knight class representing a knight piece in chess.
+ */
 class Knight : public Piece {
 public:
     Knight(int row, int col, bool is_white);
