@@ -6,9 +6,16 @@
 #define BISHOP_H
 
 
+#include "Piece.h"
 
-class Bishop {
+/**
+ * Bishop class representing a bishop piece in chess.
+ */
+class Bishop :public Piece {
 
+public:
+    Bishop(int row, int col, bool is_white);
+    bool isValidMove(int target_row, int target_col) override;
 };
 
 
