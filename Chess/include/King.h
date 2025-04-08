@@ -8,6 +8,9 @@
 
 #include "Piece.h"
 
+/**
+ * King class representing a king piece in chess.
+ */
 class King : public Piece {
 public:
     King(int row, int col, bool is_white);
