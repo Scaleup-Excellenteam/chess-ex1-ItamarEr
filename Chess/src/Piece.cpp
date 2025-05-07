@@ -10,13 +10,14 @@
  * @param col The column of the piece on the chessboard (0-7)
  * @param is_white Boolean indicating if the piece is white (true) or black (false)
  */
-Piece::Piece(const int row, const int col, const bool is_white) {
-    if (row < 0 || col < 0 || row > 8 || col > 8 ) {
+Piece::Piece(const int row, const int col, const bool is_white): piece_value(0) {
+    if (row < 0 || col < 0 || row > 8 || col > 8) {
         return;
     }
     this->row = row;
     this->col = col;
     this->is_white = is_white;
+
 }
 
 /**
@@ -27,6 +28,7 @@ Piece::Piece(const Piece& other) {
     this->row = other.row;
     this->col = other.col;
     this->is_white = other.is_white;
+    this->piece_value = other.piece_value;
 }
 
 /**
@@ -39,8 +41,13 @@ Piece& Piece::operator=(const Piece& other) {
         this->row = other.row;
         this->col = other.col;
         this->is_white = other.is_white;
+        this->piece_value = other.piece_value;
     }
     return *this;
+}
+
+int Piece::getValue() const {
+    return piece_value;
 }
 
 /**
@@ -87,4 +94,8 @@ void Piece::setCol(const int col) {
         return;
     }
     this->col = col;
+}
+
+bool Piece::operator<(const Piece &other) const {
+    return this->piece_value < other.piece_value;
 }

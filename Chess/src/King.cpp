@@ -11,7 +11,9 @@
  * @param is_white Boolean indicating if the piece is white (true) or black (false)
  */
 King::King(const int row, const int col, const bool is_white):
-    Piece(row, col, is_white) {}
+    Piece(row, col, is_white) {
+    piece_value = 1000;
+}
 
 /**
  * Checks if the move is valid for a King.

@@ -12,6 +12,7 @@
  */
 Pawn::Pawn(const int row, const int col, const bool is_white):
     Piece(row, col, is_white) {
+    piece_value = 10;
 
 }
 
@@ -48,4 +49,5 @@ bool Pawn::isValidMove(const int target_row, const int target_col) {
     }
     return false;
 }
+
 
