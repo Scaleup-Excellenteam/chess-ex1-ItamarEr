@@ -33,7 +33,10 @@ add_executable (Chess ""
         src/Pawn.cpp
         include/Pawn.h
         src/ChessBoard.cpp
-        include/ChessBoard.h)
+        include/ChessBoard.h
+        include/PriorityQueue.h
+        include/InvalidMoveException.h
+        include/PriorityQueueException.h)
 
 
 add_subdirectory (include)
