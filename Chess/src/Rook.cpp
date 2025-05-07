@@ -11,7 +11,9 @@
  * @param is_white Boolean indicating if the piece is white (true) or black (false)
  */
 Rook::Rook(const int row, const int col, const bool is_white)
-: Piece(row, col, is_white) {}
+: Piece(row, col, is_white) {
+    piece_value = 50;
+}
 
 /**
  * Checks if the move is valid for a Rool.

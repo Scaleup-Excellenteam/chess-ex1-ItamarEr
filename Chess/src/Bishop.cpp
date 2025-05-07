@@ -12,7 +12,9 @@
  * @param is_white Boolean indicating if the piece is white (true) or black (false)
  */
 Bishop::Bishop(const int row, const int col, const bool is_white):
-Piece(row, col, is_white) {}
+Piece(row, col, is_white) {
+    piece_value = 30;
+}
 
 
 /**
