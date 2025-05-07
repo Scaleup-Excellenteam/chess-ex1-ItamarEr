@@ -1,0 +1,8 @@
+//
+// Created by Erez on 07/05/2025.
+//
+
+#ifndef PRIORITYQUEUEEXCEPTION_H
+#define PRIORITYQUEUEEXCEPTION_H
+
+#endif //PRIORITYQUEUEEXCEPTION_H
