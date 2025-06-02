@@ -18,3 +18,13 @@ checkmate or stalemate are handled with extreme or zero scores.
 The overall time complexity of the algorithm is O(n*b^d),
 where n is the number of initial valid moves,
 b is the average number of moves per position (valid moves inside minimax) and d is the depth.
+
+The multithreading works as follows:
+The program uses multithreading to speed up move evaluation. 
+When searching for the best move, 
+the set of valid moves is divided among several threads. 
+Each thread simulates and scores its assigned moves independently using a local copy of the board, 
+ensuring thread safety. 
+The main thread waits for all worker threads to finish, 
+then selects the best move from the combined results. 
+This parallelization significantly reduces the time required for move calculation.
