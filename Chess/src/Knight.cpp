@@ -34,3 +34,7 @@ bool Knight::isValidMove(const int target_row, const int target_col) {
         }
     return false;
 }
+
+char Knight::getPieceName() const {
+    return is_white ? 'N' : 'n';
+}

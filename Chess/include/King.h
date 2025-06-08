@@ -15,7 +15,7 @@ class King : public Piece {
 public:
     King(int row, int col, bool is_white);
     bool isValidMove(int target_row, int target_col) override;
-
+    char getPieceName() const override;
 };
 
 

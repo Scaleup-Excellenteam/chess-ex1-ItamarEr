@@ -29,6 +29,7 @@ public:
     bool getColor() const;
     void setRow(int row);
     void setCol(int col);
+    virtual char getPieceName() const = 0;
     bool operator<(const Piece& other) const;
     virtual ~Piece() = default;
 };

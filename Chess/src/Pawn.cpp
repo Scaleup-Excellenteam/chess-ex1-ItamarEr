@@ -50,4 +50,8 @@ bool Pawn::isValidMove(const int target_row, const int target_col) {
     return false;
 }
 
+char Pawn::getPieceName() const {
+    return is_white ? 'P' : 'p';
+}
+
 

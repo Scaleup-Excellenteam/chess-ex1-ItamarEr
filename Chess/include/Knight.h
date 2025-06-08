@@ -14,6 +14,7 @@ class Knight : public Piece {
 public:
     Knight(int row, int col, bool is_white);
     bool isValidMove(int target_row, int target_col) override;
+    char getPieceName() const override;
 };
 
 

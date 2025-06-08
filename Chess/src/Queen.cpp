@@ -41,3 +41,7 @@ bool Queen::isValidMove(const int target_row, const int target_col) {
     return false;
 
 }
+
+char Queen::getPieceName() const {
+    return is_white ? 'Q' : 'q';
+}

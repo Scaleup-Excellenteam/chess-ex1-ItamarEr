@@ -14,7 +14,7 @@ class Rook: public Piece {
 public:
     Rook(int row, int col, bool is_white);
     bool isValidMove(int target_row, int target_col) override;
-
+    char getPieceName() const override;
 };
 
 

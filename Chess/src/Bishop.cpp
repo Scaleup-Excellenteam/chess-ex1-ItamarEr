@@ -34,3 +34,7 @@ bool Bishop::isValidMove(const int target_row, const int target_col) {
     }
     return false;
 }
+
+char Bishop::getPieceName() const  {;
+    return is_white ? 'B' : 'b';
+}

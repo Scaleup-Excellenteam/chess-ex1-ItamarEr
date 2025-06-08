@@ -36,3 +36,7 @@ bool Rook::isValidMove(const int target_row, const int target_col) {
     }
     return false;
 }
+
+char Rook::getPieceName() const {
+    return is_white ? 'R' : 'r';
+}

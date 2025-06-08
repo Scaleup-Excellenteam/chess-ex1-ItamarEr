@@ -32,3 +32,7 @@ bool King::isValidMove(const int target_row, const int target_col) {
     return false;
 
 }
+
+char King::getPieceName() const  {;
+    return is_white ? 'K' : 'k';
+}
