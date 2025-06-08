@@ -36,7 +36,9 @@ add_executable (Chess ""
         include/ChessBoard.h
         include/PriorityQueue.h
         include/InvalidMoveException.h
-        include/PriorityQueueException.h)
+        include/PriorityQueueException.h
+        src/Game.cpp
+        include/Game.h)
 
 
 add_subdirectory (include)
