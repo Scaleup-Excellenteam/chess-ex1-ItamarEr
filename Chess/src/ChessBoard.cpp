@@ -545,7 +545,7 @@ int ChessBoard::minimax(const bool forWhite, const int depth,int alpha
         auto sim = simulateMove(move, localBoard);
 
         int score = evaluateMove(moveObj, localBoard);
-        const int reply = minimax(!forWhite, depth - 1, -alpha,-beta,localBoard);
+        const int reply = minimax(!forWhite, depth - 1, alpha, beta, localBoard);
         undoMove(sim, localBoard);
 
         score -= reply;
