@@ -39,7 +39,7 @@ public:
     PriorityQueue() : priority_queue() {}
 
     void push(const T& item) {
-        lock_guard lock(pqMutex);
+        unique_lock lock(pqMutex);
         auto it = priority_queue.begin();
         while (it != priority_queue.end() && comp(*it, item)) {
             ++it;
@@ -52,7 +52,7 @@ public:
     }
 
     T pull() {
-        lock_guard lock(pqMutex);
+        unique_lock lock(pqMutex);
         if (priority_queue.empty()) {
             throw PriorityQueueException("The priority queue is empty");
         }
