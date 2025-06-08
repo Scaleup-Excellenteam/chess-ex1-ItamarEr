@@ -272,6 +272,7 @@ void Chess::doTurn()
 	}
 }
 
+
 // C'tor
 Chess::Chess(const string& start)
 	: m_boardString(start),m_codeResponse(-1)
@@ -281,7 +282,7 @@ Chess::Chess(const string& start)
 }
 
 // get the source and destination 
-string Chess::getInput()
+string Chess::getInput(const string &input)
 {
 	static bool isFirst = true;
 
@@ -292,8 +293,15 @@ string Chess::getInput()
 
 	displayBoard();
 	showAskInput();
+	if (input.empty())
+	{
+		cin >> m_input;
+	}
+	else
+	{
+		m_input = input;
+	}
 
-	cin >> m_input;
 	if (isExit())
 		return "exit";
 	while (!isValid() || isSame())
