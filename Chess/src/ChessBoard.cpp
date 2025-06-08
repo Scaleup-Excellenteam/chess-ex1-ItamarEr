@@ -17,8 +17,9 @@
 /**
  * ctor for ChessBoard
  * @param boardString The string representation of the chessboard
+ * @param depth The depth of the search for the AI (default is 4)
  */
-ChessBoard::ChessBoard(const string& boardString): isWhiteTurn(true) {
+ChessBoard::ChessBoard(const string& boardString, const int depth): isWhiteTurn(true),depth(depth), threadsCompleted(0),numThreads(1) {
 
     chessBoard.resize(8, vector<Piece*>(8, nullptr));
     // Initialize the board with pieces
@@ -78,6 +79,40 @@ ChessBoard::ChessBoard(const string& boardString): isWhiteTurn(true) {
 }
 
 /**
+ * Function to clone the chessboard including the pieces.
+ * @return The cloned chessboard as a vector of vectors of Piece pointers.
+ */
+vector<vector<Piece*>> ChessBoard::cloneBoard() const {
+    vector newBoard(8, vector<Piece*>(8, nullptr));
+    for (int i = 0; i < 8; ++i) {
+        for (int j = 0; j < 8; ++j) {
+            if (chessBoard[i][j]) {
+                Piece* original = chessBoard[i][j];
+
+                if (dynamic_cast<Pawn*>(original)) {
+                    newBoard[i][j] = new Pawn(i, j, original->getColor());
+                } else if (dynamic_cast<Rook*>(original)) {
+                    newBoard[i][j] = new Rook(i, j, original->getColor());
+                } else if (dynamic_cast<Knight*>(original)) {
+                    newBoard[i][j] = new Knight(i, j, original->getColor());
+                } else if (dynamic_cast<Bishop*>(original)) {
+                    newBoard[i][j] = new Bishop(i, j, original->getColor());
+                } else if (dynamic_cast<Queen*>(original)) {
+                    newBoard[i][j] = new Queen(i, j, original->getColor());
+                } else if (dynamic_cast<King*>(original)) {
+                    newBoard[i][j] = new King(i, j, original->getColor());
+                }
+
+                // copy all properties using operator=
+                *newBoard[i][j] = *original;
+            }
+        }
+    }
+    return newBoard;
+}
+
+
+/**
  * Check if the move is valid for the piece at the source position
  * to the target position.
  * if the move is valid, it calls movePiece to move the piece.
@@ -85,34 +120,37 @@ ChessBoard::ChessBoard(const string& boardString): isWhiteTurn(true) {
  * @param source_col The column of the source position
  * @param target_row The row of the target position
  * @param target_col The column of the target position
+ * @param localBoard A reference to the local board state to check the move against
+ * @param forWhite true if the moving piece is white, false if black
  * @return A code indicating the result of the move.
  */
-int ChessBoard::isValidMove(const int source_row, const int source_col, const int target_row, const int target_col) {
-    if (chessBoard[source_row][source_col] == nullptr) {
+int ChessBoard::isValidMove(const int source_row, const int source_col, const int target_row, const int target_col,
+     vector<vector<Piece*>>& localBoard, const bool forWhite) const {
+    if (localBoard[source_row][source_col] == nullptr) {
         return 11; // There is no piece at the source
     }
-    if (chessBoard[source_row][source_col]->getColor() != (isWhiteTurn)) {
+    if (localBoard[source_row][source_col]->getColor() != (forWhite)) {
         return 12; // The piece in the source is piece of your opponent
     }
-    if (chessBoard[target_row][target_col] != nullptr &&
-        chessBoard[source_row][source_col]->getColor() == chessBoard[target_row][target_col]->getColor()) {
+    if (localBoard[target_row][target_col] != nullptr &&
+        localBoard[source_row][source_col]->getColor() == localBoard[target_row][target_col]->getColor()) {
         return 13; // There one of your pieces at the destination
     }
-    if (!chessBoard[source_row][source_col]->isValidMove(target_row, target_col)) {
+    if (!localBoard[source_row][source_col]->isValidMove(target_row, target_col)) {
         return 21; // Illegal movement of that piece
     }
 
-    if (!isPathClear(source_row, source_col, target_row, target_col)) {
+    if (!isPathClear(source_row, source_col, target_row, target_col, localBoard)) {
         return 21; // Illegal movement of that piece
     }
 
-    if (simulateMoveForCheck(source_row, source_col, target_row, target_col) == 31) {
+    if (simulateMoveForCheck(source_row, source_col, target_row, target_col,localBoard) == 31) {
         return 31; // This movement will cause checkmate
     }
 
     // Check if the pawn only captures diagonally
-    if (dynamic_cast<Pawn*>(chessBoard[source_row][source_col]) != nullptr) {
-        if (chessBoard[target_row][target_col] != nullptr) {
+    if (dynamic_cast<Pawn*>(localBoard[source_row][source_col]) != nullptr) {
+        if (localBoard[target_row][target_col] != nullptr) {
             if (source_col == target_col) {
                 return 21; // Illegal movement of that piece
             }
@@ -129,11 +167,11 @@ int ChessBoard::isValidMove(const int source_row, const int source_col, const in
     moveString += static_cast<char>('1' + source_col);
     moveString += static_cast<char>('a' + target_row);
     moveString += static_cast<char>('1' + target_col);
-    const auto sim = simulateMove(moveString);
-    if (isKingInCheck(!isWhiteTurn)) {
+    const auto sim = simulateMove(moveString,localBoard);
+    if (isKingInCheck(!forWhite, localBoard)) {
         checkFlag = true;
     }
-    undoMove(sim);
+    undoMove(sim,localBoard);
     if (checkFlag) {
         return 41; // The last movement was legal and caused check
     }
@@ -144,15 +182,16 @@ int ChessBoard::isValidMove(const int source_row, const int source_col, const in
 /**
  * Check if the king of the specified color is in check.
  * @param isWhite Color of the king to check (true for white, false for black)
+ * @param localBoard A reference to the local board state to check for check
  * @return true if the king is in check, false otherwise
  */
-bool ChessBoard::isKingInCheck(const bool isWhite) const {
+bool ChessBoard::isKingInCheck(const bool isWhite, const vector<vector<Piece*>>& localBoard) const {
     int kingRow = -1, kingCol = -1;
 
     // Find the king's position
     for (int row = 0; row < 8; ++row) {
         for (int col = 0; col < 8; ++col) {
-            if (Piece* piece = chessBoard[row][col]; piece != nullptr
+            if (Piece* piece = localBoard[row][col]; piece != nullptr
                 && piece->getColor() == isWhite && dynamic_cast<King*>(piece) != nullptr) {
                 kingRow = row;
                 kingCol = col;
@@ -166,10 +205,10 @@ bool ChessBoard::isKingInCheck(const bool isWhite) const {
     const bool opponent_color = !isWhite;
     for (int row = 0; row < 8; ++row) {
         for (int col = 0; col < 8; ++col) {
-            if (Piece* piece = chessBoard[row][col]; piece != nullptr
+            if (Piece* piece = localBoard[row][col]; piece != nullptr
                 && piece->getColor() == opponent_color
                 && piece->isValidMove(kingRow, kingCol)
-                && isPathClear(row, col, kingRow, kingCol)) {
+                && isPathClear(row, col, kingRow, kingCol, localBoard)) {
                 return true;
             }
         }
@@ -184,12 +223,14 @@ bool ChessBoard::isKingInCheck(const bool isWhite) const {
  * @param startCol The starting column
  * @param endRow The ending row
  * @param endCol The ending column
+ * @param localBoard A reference to the local board state to check the path against
  * @return true if the path is clear, false otherwise
  */
-bool ChessBoard::isPathClear(const int startRow, const int startCol, const int endRow, const int endCol) const {
+bool ChessBoard::isPathClear(const int startRow, const int startCol, const int endRow, const int endCol,
+    const vector<vector<Piece*>>& localBoard) const {
 
     // Knights can jump over pieces, so we don't need to check the path for them
-    if (dynamic_cast<Knight*>(chessBoard[startRow][startCol]) != nullptr) {return true;}
+    if (dynamic_cast<Knight*>(localBoard[startRow][startCol]) != nullptr) {return true;}
 
     // get the direction of the movement
     const int rowDirection = (endRow - startRow) == 0 ? 0 : (endRow - startRow) / abs(endRow - startRow);
@@ -200,7 +241,7 @@ bool ChessBoard::isPathClear(const int startRow, const int startCol, const int e
 
     // Check the path until we reach the target position
     while (currentRow != endRow || currentCol != endCol) {
-        if (chessBoard[currentRow][currentCol] != nullptr) {
+        if (localBoard[currentRow][currentCol] != nullptr) {
             return false;
         }
         currentRow += rowDirection;
@@ -210,9 +251,12 @@ bool ChessBoard::isPathClear(const int startRow, const int startCol, const int e
 }
 
 /**
- * convert a move string to an integer code and calls isValidMove.
+ * Function to execute a move on the chessboard.
+ * It checks if the move is valid and then moves the piece.
  * @param moveString The move string in the format "a1b2"
  * @return the code of the move or throw an exception if the move is invalid.
+ * @throws invalid_argument if the move string is invalid or has an incorrect length.
+ * @throws InvalidMoveException if the move is invalid according to the game rules.
  */
 int ChessBoard::executeMove(const string& moveString) {
     if (moveString.length() != 4) {
@@ -227,7 +271,7 @@ int ChessBoard::executeMove(const string& moveString) {
         target_row < 0 || target_row > 7 || target_col < 0 || target_col > 7) {
         throw invalid_argument("Invalid move string");
     }
-    const int code = isValidMove(source_row, source_col, target_row, target_col);
+    const int code = isValidMove(source_row, source_col, target_row, target_col, chessBoard, isWhiteTurn);
     if (code == 41 || code == 42) {
         movePiece(source_row, source_col, target_row, target_col);
     }
@@ -270,58 +314,89 @@ void ChessBoard::movePiece(const int source_row, const int source_col, const int
  * @param source_col The column of the source position
  * @param target_row The row of the target position
  * @param target_col The column of the target position
+ * @param localBoard A reference to the local board state to simulate the move on
  * @return 0 if the move is valid and does not cause checkmate,
  * 31 if the move would cause checkmate.
  */
-int ChessBoard::simulateMoveForCheck(const int source_row, const int source_col, const int target_row, const int target_col) {
+int ChessBoard::simulateMoveForCheck(const int source_row, const int source_col, const int target_row, const int target_col,
+    vector<vector<Piece*>>& localBoard) const {
     // Simulate the move
-    Piece* temp = chessBoard[target_row][target_col];
-    chessBoard[target_row][target_col] = chessBoard[source_row][source_col];
-    chessBoard[source_row][source_col] = nullptr;
-    chessBoard[target_row][target_col]->setRow(target_row);
-    chessBoard[target_row][target_col]->setCol(target_col);
+    Piece* temp = localBoard[target_row][target_col];
+    localBoard[target_row][target_col] = localBoard[source_row][source_col];
+    localBoard[source_row][source_col] = nullptr;
+    localBoard[target_row][target_col]->setRow(target_row);
+    localBoard[target_row][target_col]->setCol(target_col);
 
     // Check if the move causes checkmate
-    if (isKingInCheck(isWhiteTurn)) {
+    if (isKingInCheck(isWhiteTurn, localBoard)) {
         // Revert the move
-        chessBoard[source_row][source_col] = chessBoard[target_row][target_col];
-        chessBoard[target_row][target_col] = temp;
-        chessBoard[source_row][source_col]->setRow(source_row);
-        chessBoard[source_row][source_col]->setCol(source_col);
+        localBoard[source_row][source_col] = localBoard[target_row][target_col];
+        localBoard[target_row][target_col] = temp;
+        localBoard[source_row][source_col]->setRow(source_row);
+        localBoard[source_row][source_col]->setCol(source_col);
 
         return 31; // This movement will cause checkmate
     }
 
     // Revert the move
-    chessBoard[source_row][source_col] = chessBoard[target_row][target_col];
-    chessBoard[target_row][target_col] = temp;
-    chessBoard[source_row][source_col]->setRow(source_row);
-    chessBoard[source_row][source_col]->setCol(source_col);
+    localBoard[source_row][source_col] = localBoard[target_row][target_col];
+    localBoard[target_row][target_col] = temp;
+    localBoard[source_row][source_col]->setRow(source_row);
+    localBoard[source_row][source_col]->setCol(source_col);
 
     return 0; // The move is valid and does not cause checkmate
 }
 
 
 /**
- * Get all valid moves for a given color.
- * @param forWhite true if getting moves for white, false if for black
+ * Function to get all valid moves for a given piece.
+ * @param piece the piece to get valid moves for
+ * @param localBoard A reference to the local board state to check for valid moves
  * @return A vector of strings representing the valid moves in the format "a1b2"
  */
-vector<string> ChessBoard::getAllValidMoves(const bool forWhite)  {
-    bool flag = false;
-    if (forWhite != isWhiteTurn) {
-        flag = true;
-        switchTurn();
+vector<string> ChessBoard::getValidMovesForPiece(const Piece *piece,
+                                                 vector<vector<Piece*>>& localBoard) const  {
+    if (piece == nullptr) {
+        return vector<string>();
     }
+    const int row = piece->getRow();
+    const int col = piece->getCol();
+    const bool forWhite = piece->getColor();
+
+    vector<string> validMoves;
+    for (int trg_row = 0; trg_row < 8; ++trg_row) {
+        for (int trg_col = 0; trg_col < 8; ++trg_col) {
+            const int code = isValidMove(row, col, trg_row, trg_col,localBoard,forWhite);
+            if (code == 41 || code == 42) {
+                string move;
+                move += static_cast<char>('a' + row);
+                move += static_cast<char>('1' + col);
+                move += static_cast<char>('a' + trg_row);
+                move += static_cast<char>('1' + trg_col);
+                validMoves.push_back(move);
+            }
+        }
+    }
+    return validMoves;
+}
+
+
+/**
+ * Get all valid moves for a given color.
+ * @param forWhite true if getting moves for white, false if for black
+ * @param localBoard A reference to the local board state to check for valid moves
+ * @return A vector of strings representing the valid moves in the format "a1b2"
+ */
+vector<string> ChessBoard::getAllValidMoves(const bool forWhite, vector<vector<Piece*>>& localBoard) const  {
 
     vector<string> validMoves;
     for (int row = 0; row < 8; ++row) {
         for (int col = 0; col < 8; ++col) {
-            if (chessBoard[row][col] != nullptr) {
-                if (chessBoard[row][col]->getColor() == forWhite) {
+            if (localBoard[row][col] != nullptr) {
+                if (localBoard[row][col]->getColor() == forWhite) {
                     for (int trg_row = 0; trg_row < 8; ++trg_row) {
                         for (int trg_col = 0; trg_col < 8; ++trg_col) {
-                            const int code = isValidMove(row, col, trg_row, trg_col);
+                            const int code = isValidMove(row, col, trg_row, trg_col,localBoard, forWhite);
                             if (code == 41 || code == 42) {
                                 string move;
                                 move += static_cast<char>('a' + row);
@@ -336,28 +411,27 @@ vector<string> ChessBoard::getAllValidMoves(const bool forWhite)  {
             }
         }
     }
-    if (flag) {
-        switchTurn();
-    }
+
     return validMoves;
 }
 
 /**
  * Simulate a move for evaluation purposes.
  * @param moveString The move string in the format "a1b2"
+ * @param localBoard A reference to the local board state to simulate the move on
  * @return A Move object representing the simulated move
  */
-ChessBoard::Move ChessBoard::simulateMove(const string &moveString) {
+ChessBoard::Move ChessBoard::simulateMove(const string &moveString, vector<vector<Piece*>>& localBoard) const {
     int fromRow = moveString[0] - 'a';
     int fromCol = moveString[1] - '1';
     int toRow = moveString[2] - 'a';
     int toCol = moveString[3] - '1';
 
-    Piece* moved = chessBoard[fromRow][fromCol];
-    Piece* captured = chessBoard[toRow][toCol];
+    Piece* moved = localBoard[fromRow][fromCol];
+    Piece* captured = localBoard[toRow][toCol];
 
-    chessBoard[toRow][toCol] = moved;
-    chessBoard[fromRow][fromCol] = nullptr;
+    localBoard[toRow][toCol] = moved;
+    localBoard[fromRow][fromCol] = nullptr;
     moved->setRow(toRow);
     moved->setCol(toCol);
 
@@ -367,33 +441,35 @@ ChessBoard::Move ChessBoard::simulateMove(const string &moveString) {
 /**
  * Undo a simulated move.
  * @param move The Move object representing the move to undo
+ * @param localBoard A reference to the local board state to undo the move on
  */
-void ChessBoard::undoMove(const Move &move) {
-    Piece* moved = chessBoard[move.target_row][move.target_col];
-    chessBoard[move.source_row][move.source_col] = moved;
+void ChessBoard::undoMove(const Move &move,vector<vector<Piece*>>& localBoard) const {
+    Piece* moved = localBoard[move.target_row][move.target_col];
+    localBoard[move.source_row][move.source_col] = moved;
     moved->setRow(move.source_row);
     moved->setCol(move.source_col);
 
-    chessBoard[move.target_row][move.target_col] = move.pieceCaptured;
+    localBoard[move.target_row][move.target_col] = move.pieceCaptured;
 }
 
 /**
  * Evaluate a move based on various criteria.
  * @param move The move object
+ * @param localBoard A reference to the local board state to evaluate the move on
  * @return An integer score representing the evaluation of the move
  */
-int ChessBoard::evaluateMove(const Move &move) {
+int ChessBoard::evaluateMove(const Move &move, vector<vector<Piece*>> &localBoard) const {
     int score = 0;
 
     const int toRow = move.target_row;
     const int toCol = move.target_col;
 
 
-    const Piece* piece = chessBoard[toRow][toCol];
+    const Piece* piece = localBoard[toRow][toCol];
 
     const bool isWhite = piece->getColor();
 
-    const int checkmate = checkmateCheck(!isWhite);
+    const int checkmate = checkmateCheck(!isWhite, localBoard);
     if (isWhite) {
         if (checkmate == 1) return INT_MIN; // White lost
         if (checkmate == 2) return INT_MAX; // Black lost
@@ -409,7 +485,7 @@ int ChessBoard::evaluateMove(const Move &move) {
     }
 
     // Add value if the piece moved is threaten a higher value piece
-    const vector<Piece*> threats = getThreatsBy(isWhite ,toRow, toCol);
+    const vector<Piece*> threats = getThreatsBy(isWhite ,toRow, toCol,localBoard);
     for (Piece* target : threats) {
         if (target->getValue() > piece->getValue() && dynamic_cast<King*>(target) == nullptr) {
             score += (target->getValue() - piece->getValue()) / 10;
@@ -417,14 +493,14 @@ int ChessBoard::evaluateMove(const Move &move) {
     }
 
     // Deduct value if the piece is threatened by a lower value piece
-    const vector<Piece*> threatenedBy = getThreatsOn(isWhite ,toRow, toCol);
+    const vector<Piece*> threatenedBy = getThreatsOn(isWhite ,toRow, toCol,localBoard);
     for (const Piece* attacker : threatenedBy) {
         if (attacker->getValue() < piece->getValue()) {
             score -= (piece->getValue() - attacker->getValue()) / 10;
         }
     }
 
-    if (isKingInCheck(!isWhite)) {
+    if (isKingInCheck(!isWhite, localBoard)) {
         score += 10; // Add points for checking
     }
 
@@ -440,75 +516,164 @@ int ChessBoard::evaluateMove(const Move &move) {
     return score;
 }
 
+
 /**
  * Minimax algorithm to evaluate the best move.
  * @param forWhite true if evaluating for white, false if for black
  * @param depth The depth of the search
+ * @param alpha The alpha value for pruning
+ * @param beta The beta value for pruning
+ * @param localBoard A reference to the local board state to evaluate the moves on
  * @return The score of the best move
  */
-int ChessBoard::minimax(const bool forWhite, const int depth) {
+int ChessBoard::minimax(const bool forWhite, const int depth,int alpha
+    , const int beta,vector<vector<Piece*>>& localBoard) {
     if (depth == 0) return 0;
 
-    vector<string> moves = getAllValidMoves(forWhite);
+    vector<string> moves = getAllValidMoves(forWhite, localBoard);
     if (moves.empty()) return 0;
-    int bestScore = INT_MIN;
 
+    int bestScore = INT_MIN;
     for (const string& move : moves) {
         const int toRow = move[2] - 'a';
         const int toCol = move[3] - '1';
-        // Score this move
-        Move moveObj(move);
-        if (chessBoard[toRow][toCol] != nullptr) {
-            moveObj.setCapturedPiece(chessBoard[toRow][toCol]);
-        }
-        auto sim = simulateMove(move);
 
-        int score = evaluateMove(moveObj);
-        // recursive part
-        const int reply = minimax(!forWhite, depth - 1);
-        undoMove(sim);
+        Move moveObj(move);
+        if (localBoard[toRow][toCol] != nullptr) {
+            moveObj.setCapturedPiece(localBoard[toRow][toCol]);
+        }
+        auto sim = simulateMove(move, localBoard);
+
+        int score = evaluateMove(moveObj, localBoard);
+        const int reply = minimax(!forWhite, depth - 1, alpha, beta, localBoard);
+        undoMove(sim, localBoard);
 
         score -= reply;
-        bestScore = max(bestScore, score);
-
+        if (score > bestScore) bestScore = score;
+        if (score >= beta) return beta;
+        if (score > alpha) alpha = score;
     }
-
     return bestScore;
 }
 
-vector<ChessBoard::Move> ChessBoard::getAllMovesScores(const bool forWhite) {
-    vector<Move> allMovesScores;
-    vector<string> validMoves = getAllValidMoves(forWhite);
+/**
+ * Print the 3 best moves from the priority queue.
+ * It catches any exceptions related to the priority queue.
+ */
+void ChessBoard::printBestMoves() const {
+    try {
+        cout << "The best 3 moves are: " << endl;
+        cout << pq << endl;
+    }
+    catch (const PriorityQueueException& e) {
+        cout << e.what() << endl;
+    }
+}
 
-    for (const string& move : validMoves) {
-        const int toRow = move[2] - 'a';
-        const int toCol = move[3] - '1';
-
-        Move moveObj(move);
-        if (chessBoard[toRow][toCol] != nullptr) {
-            moveObj.setCapturedPiece(chessBoard[toRow][toCol]);
+/**
+ * Function to update the priority queue with the best moves.
+ * it uses multiple threads to evaluate the moves.
+ * Each thread evaluates a different move.
+ */
+void ChessBoard::updatePriorityQueue() {
+    pq.clear();
+    {
+        lock_guard lock(threadMutex);
+        threadsCompleted = 0;
+    }
+    const bool forWhite = isWhiteTurn;
+    // Collect all pieces and valid moves
+    vector<tuple<int, int, vector<string>>> pieceMoves;
+    {
+        auto sharedBoard = cloneBoard();
+        for (int i = 0; i < 8; ++i) {
+            for (int j = 0; j < 8; ++j) {
+                if (sharedBoard[i][j] && sharedBoard[i][j]->getColor() == forWhite) {
+                    vector<string> moves = getValidMovesForPiece(sharedBoard[i][j], sharedBoard);
+                    if (!moves.empty()) {
+                        pieceMoves.emplace_back(i, j, moves);
+                    }
+                }
+            }
         }
-        auto sim = simulateMove(move);
-
-        int score = evaluateMove(moveObj);
-
-        const int replyScore = minimax(!forWhite, 2);
-
-        undoMove(sim);
-        // Subtract opponent's best reply
-        score -= replyScore;
-        moveObj.setValue(score);
-        allMovesScores.push_back(moveObj);
+        // Clean up shared board
+        for (auto& row : sharedBoard)
+            for (auto& p : row)
+                delete p;
     }
 
-    return allMovesScores;
+    // Distribute work for threads
+    vector<vector<tuple<int, int, string>>> threadWork(numThreads);
+    int moveIdx = 0;
+    for (const auto& [i, j, moves] : pieceMoves) {
+        for (const string& move : moves) {
+            threadWork[moveIdx % numThreads].emplace_back(i, j, move);
+            moveIdx++;
+        }
+    }
+
+    // Process moves in threads
+    vector<PriorityQueue<Move>> threadQueues(numThreads);
+    vector<thread> workers;
+
+    for (int t = 0; t < numThreads; ++t) {
+        workers.emplace_back([&, t]() {
+            auto localBoard = cloneBoard();
+            for (const auto& [i, j, move] : threadWork[t]) {
+                Move moveObj(move);
+                const int toRow = move[2] - 'a';
+                const int toCol = move[3] - '1';
+
+                if (localBoard[toRow][toCol]) {
+                    moveObj.setCapturedPiece(localBoard[toRow][toCol]);
+                }
+
+                auto sim = simulateMove(move, localBoard);
+                int score = evaluateMove(moveObj, localBoard);
+                const int replyScore = minimax(!forWhite,depth - 1,INT_MIN,INT_MAX , localBoard);
+                undoMove(sim, localBoard);
+
+                score -= replyScore;
+                moveObj.setValue(score);
+                threadQueues[t].push(moveObj);
+
+            }
+            {
+                lock_guard lock(threadMutex);
+                threadsCompleted++;
+                threadCondition.notify_one();
+            }
+
+            // Clean up
+            for (auto& row : localBoard)
+                for (const auto& p : row)
+                    delete p;
+        });
+    }
+
+    // Merge results
+    for (auto& worker : workers) {
+        if (worker.joinable()) worker.join();
+    }
+
+    for (auto& threadQueue : threadQueues) {
+        while (!threadQueue.empty()) {
+            pq.push(threadQueue.pull());
+        }
+    }
 }
 
 
-int ChessBoard::checkmateCheck(const bool forWhite) {
-    const vector<string> allMoves = getAllValidMoves(forWhite);
+/**
+ * Function to check for checkmate or stalemate.
+ * @param forWhite True if checking for white, false if checking for black
+ * @param localBoard The local board state to check for checkmate or stalemate
+ * @return checkmate status: 1 if white lost, 2 if black lost, 3 for stalemate, 0 for no checkmate or stalemate.
+ */
+int ChessBoard::checkmateCheck(const bool forWhite, vector<vector<Piece*>>& localBoard) const {
+    const vector<string> allMoves = getAllValidMoves(forWhite, localBoard);
     if (allMoves.empty()) {
-        if (isKingInCheck(forWhite)) {
+        if (isKingInCheck(forWhite, localBoard)) {
             return forWhite ? 1 : 2; // 1: White lost, 2: Black lost
         }
         return 3; // Stalemate
@@ -516,13 +681,22 @@ int ChessBoard::checkmateCheck(const bool forWhite) {
     return 0; // No checkmate or stalemate
 }
 
-vector<Piece*> ChessBoard::getThreatsBy(const bool forWhite, const int row, const int col) const {
+/**
+ * Get all pieces that threaten by a specific position.
+ * @param forWhite true if getting threats for white, false if for black
+ * @param row The row of the position to check
+ * @param col The column of the position to check
+ * @param localBoard A reference to the local board state to check for threats
+ * @return A vector of Piece pointers that threaten by the specified position
+ */
+vector<Piece*> ChessBoard::getThreatsBy(const bool forWhite, const int row, const int col
+    ,const vector<vector<Piece*>>& localBoard) const {
     vector<Piece*> piecesThreaten;
     for (int i = 0; i < 8; ++i) {
         for (int j = 0; j < 8; ++j) {
-            if (chessBoard[i][j] != nullptr && chessBoard[i][j]->getColor() != forWhite) {
-                if (chessBoard[row][col]->isValidMove(i, j) && isPathClear( row, col, i, j)) {
-                    piecesThreaten.push_back(chessBoard[i][j]);
+            if (localBoard[i][j] != nullptr && localBoard[i][j]->getColor() != forWhite) {
+                if (localBoard[row][col]->isValidMove(i, j) && isPathClear( row, col, i, j, localBoard)) {
+                    piecesThreaten.push_back(localBoard[i][j]);
                 }
             }
         }
@@ -530,18 +704,70 @@ vector<Piece*> ChessBoard::getThreatsBy(const bool forWhite, const int row, cons
     return piecesThreaten;
 }
 
-vector<Piece *> ChessBoard::getThreatsOn(const bool forWhite, const int row, const int col) const {
+/**
+ * Get all pieces that threaten a specific position.
+ * @param forWhite true if getting threats for white, false if for black
+ * @param row The row of the position to check
+ * @param col The column of the position to check
+ * @param localBoard A reference to the local board state to check for threats
+ * @return A vector of Piece pointers that threaten the specified position
+ */
+vector<Piece *> ChessBoard::getThreatsOn(const bool forWhite, const int row, const int col
+    , const vector<vector<Piece*>>& localBoard) const {
     vector<Piece *> piecesThreat;
     for (int i = 0; i < 8; ++i) {
         for (int j = 0; j < 8; ++j) {
-            if (chessBoard[i][j] != nullptr && chessBoard[i][j]->getColor() != forWhite) {
-                if (chessBoard[i][j]->isValidMove(row, col) && isPathClear(i, j, row, col)) {
-                    piecesThreat.push_back(chessBoard[i][j]);
+            if (localBoard[i][j] != nullptr && localBoard[i][j]->getColor() != forWhite) {
+                if (localBoard[i][j]->isValidMove(row, col) && isPathClear(i, j, row, col,localBoard)) {
+                    piecesThreat.push_back(localBoard[i][j]);
                 }
             }
         }
     }
     return piecesThreat;
+}
+
+/**
+ * Get the best move from the priority queue.
+ * @return The best move as a string in the format "a1b2"
+ * @throws PriorityQueueException if the priority queue is empty
+ */
+string ChessBoard::getBestMove() {
+    if (!pq.empty()) {
+        const auto move = pq.pull();
+        return move.getMoveString();
+    }
+    throw PriorityQueueException("Priority queue is empty, no best move available");
+}
+
+/**
+ * Initialize the thread pool with a specified number of threads.
+ * @param numThreads the number of threads to initialize
+ */
+void ChessBoard::initThreadPool(const int numThreads) {
+    if (numThreads <= 0) {
+        throw invalid_argument("Number of threads must be positive");
+    }
+    this->numThreads = numThreads;
+}
+
+/**
+ * Wait for all threads to complete their work.
+ * This function blocks until all threads have finished.
+ */
+void ChessBoard::waitForThreads() {
+    unique_lock<mutex> lock(threadMutex);
+    threadCondition.wait(lock, [this]() {
+        return threadsCompleted == numThreads;
+    });
+}
+
+/**
+ * Get the current turn of the chessboard.
+ * @return true if it is white's turn, false if it is black
+ */
+bool ChessBoard::getIsWhiteTurn() const {
+    return isWhiteTurn;
 }
 
 
@@ -602,6 +828,7 @@ string ChessBoard::Move::getMoveString() const {
 
 }
 
+
 void ChessBoard::Move::setValue(const int value) {
     this->moveValue = value;
 }
@@ -609,6 +836,8 @@ void ChessBoard::Move::setValue(const int value) {
 void ChessBoard::Move::setCapturedPiece(Piece* capturedPiece) {
     this->pieceCaptured = capturedPiece;
 }
+
+
 
 ostream& operator<<(ostream& os, const ChessBoard::Move& move) {
     os << move.getMoveString();

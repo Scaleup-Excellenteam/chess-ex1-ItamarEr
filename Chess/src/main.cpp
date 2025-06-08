@@ -3,31 +3,74 @@
 #include "ChessBoard.h"
 #include "InvalidMoveException.h"
 #include "PriorityQueue.h"
+#include <chrono>
 
-int main()
-{
+
+/**
+ * Function to play an automatic game of chess (8 moves).
+ * @param depth The depth of the search for the search algorithm.
+ * @param numThreads The number of threads to use for the search algorithm.
+ */
+void automaticGame(const int depth,const int numThreads) {
 	const string board = "RNBQKBNRPPPPPPPP################################pppppppprnbqkbnr";
-
 	Chess a(board);
-	ChessBoard b(board);
-	PriorityQueue<ChessBoard::Move> pq;
+	ChessBoard b(board, depth);
+	int numMoves = 0;
+	int codeResponse = 0;
+	b.initThreadPool(numThreads);
+
+	while (numMoves < 8) {
+
+		try {
+			b.updatePriorityQueue();
+			b.waitForThreads();
+			string move = b.getBestMove();
+			codeResponse = b.executeMove(move);
+			numMoves++;
+			a.setCodeResponse(codeResponse);
+		}
+		catch (InvalidMoveException& e) {
+			cout << "Invalid move: " << e.what() << endl;
+			a.setCodeResponse(codeResponse);
+		}
+		catch (runtime_error& e) {
+			cout << "Invalid move: " << e.what() << endl;
+			a.setCodeResponse(codeResponse);
+		}
+	}
+}
+
+
+/**
+ * Function to test the time taken for the automatic game with different thread counts.
+ * @param depth The depth of the search for the search algorithm.
+ */
+void testTimes(const int depth) {
+	vector<int> numThreads = {2,4,8};
+	for (const int threads : numThreads) {
+        auto start = chrono::high_resolution_clock::now();
+        automaticGame(depth, threads);
+        auto end = chrono::high_resolution_clock::now();
+        auto duration = chrono::duration_cast<chrono::milliseconds>(end - start);
+        cout << "Time taken with " << threads << " threads: " << duration.count() << " ms" << endl;
+    }
+}
+
+
+/**
+ * Function to play a regular game of chess.
+ * @param depth The depth of the search for the search algorithm.
+ */
+void regularGame(const int depth) {
+    const string board = "RNBQKBNRPPPPPPPP################################pppppppprnbqkbnr";
+	constexpr int numThreads = 8;
+	Chess a(board);
+	ChessBoard b(board, depth);
 
 	int codeResponse = 0;
-	bool isWhiteTurn = true;
+	b.initThreadPool(numThreads);
 
-	vector<ChessBoard::Move> allMovesScores = b.getAllMovesScores(isWhiteTurn);
-	for (const auto& move : allMovesScores) {
-		pq.push(move);
-	}
-	try {
-		cout << "The best 3 moves are: " << endl;
-		cout << pq << endl;
-	}
-	catch (PriorityQueueException& e) {
-		cout << "Error: " << e.what() << endl;
-		return 1;
-	}
-	string res = a.getInput();
+	string res;
 	while (res != "exit")
 	{
 		/*
@@ -44,24 +87,32 @@ int main()
 		42 - the last movement was legal, next turn
 		*/
 		{
+			b.updatePriorityQueue();
+			b.waitForThreads();
+			b.printBestMoves();
+			res = a.getInput();
 			try {
 				codeResponse = b.executeMove(res);
-				pq.clear();
-				isWhiteTurn = !isWhiteTurn;
 			}
 			catch (InvalidMoveException& e) {
 				cout << "Invalid move: " << e.what() << endl;
 				a.setCodeResponse(codeResponse);
-				res = a.getInput();
+
+				continue;
+			}
+			catch (invalid_argument& e) {
+				cout << "Invalid move: " << e.what() << endl;
+				a.setCodeResponse(codeResponse);
 				continue;
 			}
 		}
 
 		a.setCodeResponse(codeResponse);
-
-		allMovesScores = b.getAllMovesScores(isWhiteTurn);
-		if (allMovesScores.empty()) {
-			const int checkmateCode = b.checkmateCheck(isWhiteTurn);
+		auto localBoard = b.cloneBoard();
+		const bool isWhiteTurn = b.getIsWhiteTurn();
+		auto allMoves = b.getAllValidMoves(isWhiteTurn, localBoard);
+		if (allMoves.empty()) {
+			const int checkmateCode = b.checkmateCheck(isWhiteTurn, localBoard);
 			if (checkmateCode == 3) {
 				cout << "Stalemate!" << endl;
 				break;
@@ -75,20 +126,30 @@ int main()
 				break;
 			}
 		}
+	}
+}
 
-		for (const auto& move : allMovesScores) {
-			pq.push(move);
-		}
-		try {
-			cout << "The best 3 moves are: " << endl;
-			cout << pq << endl;
-		}
-		catch (PriorityQueueException& e) {
-			cout << "Error: " << e.what() << endl;
-			return 1;
-		}
 
-		res = a.getInput();
+int main()
+{
+	cout << "Enter the depth of the search: (recommended 2-4, max 8)" << endl;
+	int depth,gameMode;
+	cin >> depth;
+	cout << "Enter the game mode: 1 for regular game, 2 for automatic game" << endl;
+	while (depth < 1 || depth > 8) {
+        cout << "Invalid depth, please enter a value between 1 and 8." << endl;
+        cin >> depth;
+    }
+	cin >> gameMode;
+	while (gameMode != 1 && gameMode != 2 ) {
+		cout << "Invalid game mode, please enter 1 for regular game or 2 for automatic game." << endl;
+		cin >> gameMode;
+	}
+	if (gameMode == 1) {
+		regularGame(depth);
+    }
+	else {
+		testTimes(depth);
 	}
 
 	cout << endl << "Exiting " << endl;

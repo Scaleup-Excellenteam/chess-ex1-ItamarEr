@@ -8,6 +8,7 @@
 #include <list>
 #include "PriorityQueueException.h"
 #include <ostream>
+#include "mutex"
 
 // Primary template for non-pointer types
 template<typename T>
@@ -32,11 +33,13 @@ class PriorityQueue {
 
     std::list<T> priority_queue;
     MyComparator<T> comp;
+    mutable mutex pqMutex;
 
 public:
     PriorityQueue() : priority_queue() {}
 
     void push(const T& item) {
+        lock_guard lock(pqMutex);
         auto it = priority_queue.begin();
         while (it != priority_queue.end() && comp(*it, item)) {
             ++it;
@@ -49,8 +52,9 @@ public:
     }
 
     T pull() {
+        lock_guard lock(pqMutex);
         if (priority_queue.empty()) {
-            throw new PriorityQueueException("The priority queue is empty");
+            throw PriorityQueueException("The priority queue is empty");
         }
         T back = priority_queue.back();
         priority_queue.pop_back();
@@ -59,7 +63,7 @@ public:
 
     friend ostream& operator<<(ostream& os, const PriorityQueue& pq) {
         if (pq.empty()) {
-            throw new PriorityQueueException("The priority queue is empty");
+            throw PriorityQueueException("The priority queue is empty");
         }
         int count = 0;
         for (auto it = pq.priority_queue.rbegin(); it != pq.priority_queue.rend() && count < 3; ++it, ++count) {
