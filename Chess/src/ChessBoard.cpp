@@ -19,7 +19,9 @@
  * @param boardString The string representation of the chessboard
  * @param depth The depth of the search for the AI (default is 4)
  */
-ChessBoard::ChessBoard(const string& boardString, const int depth): isWhiteTurn(true),depth(depth), threadsCompleted(0),numThreads(1) {
+ChessBoard::ChessBoard(const string& boardString, const int depth)
+: isWhiteTurn(true),depth(depth), threadsCompleted(0)
+,numThreads(1), fiftyMoveRuleCounter(0), isGameDrawn(false), isInsufficientMaterial(false) {
 
     chessBoard.resize(8, vector<Piece*>(8, nullptr));
     // Initialize the board with pieces
@@ -299,12 +301,31 @@ void ChessBoard::switchTurn() {
 void ChessBoard::movePiece(const int source_row, const int source_col, const int target_row, const int target_col) {
     if (chessBoard[target_row][target_col] != nullptr) {
         delete chessBoard[target_row][target_col];
+        fiftyMoveRuleCounter = 0; // Reset the fifty-move rule counter if a piece is captured
+    }
+    if (dynamic_cast<Pawn*>(chessBoard[source_row][source_col]) != nullptr) {
+        fiftyMoveRuleCounter = 0; // Reset the fifty-move rule counter if a pawn is moved
     }
     chessBoard[source_row][source_col]->setRow(target_row);
     chessBoard[source_row][source_col]->setCol(target_col);
     chessBoard[target_row][target_col] = chessBoard[source_row][source_col];
     chessBoard[source_row][source_col] = nullptr;
     switchTurn();
+    const string boardString = getBoardString();
+    if (boardRepetition.contains(boardString)) {
+        boardRepetition[boardString]++;
+    }
+    else {
+        boardRepetition[boardString] = 1;
+    }
+    if (boardRepetition[boardString] >= 3) {
+        isGameDrawn = true; // Draw by repetition
+    }
+    fiftyMoveRuleCounter++; // Increment the fifty-move rule counter
+    if (fiftyMoveRuleCounter >= 50) {
+        isGameDrawn = true;
+    }
+    checkInsufficientMaterial();
 }
 
 /**
@@ -545,7 +566,7 @@ int ChessBoard::minimax(const bool forWhite, const int depth,int alpha
         auto sim = simulateMove(move, localBoard);
 
         int score = evaluateMove(moveObj, localBoard);
-        const int reply = minimax(!forWhite, depth - 1, -alpha,-beta,localBoard);
+        const int reply = minimax(!forWhite, depth - 1, alpha,beta,localBoard);
         undoMove(sim, localBoard);
 
         score -= reply;
@@ -763,6 +784,78 @@ void ChessBoard::waitForThreads() {
 }
 
 /**
+ * Check if the game is drawn due to insufficient material.
+ * It checks if there are not enough pieces left on the board to checkmate.
+ */
+void ChessBoard::checkInsufficientMaterial() {
+    int numWhiteKnights = 0;
+    int numWhiteBishops = 0;
+    int numBlackKnights = 0;
+    int numBlackBishops = 0;
+    for (int i = 0; i < 8; ++i) {
+        for (int j = 0; j < 8; ++j) {
+            if (chessBoard[i][j] != nullptr) {
+                if (dynamic_cast<Knight*>(chessBoard[i][j]) != nullptr) {
+                    if (chessBoard[i][j]->getColor()) {
+                        numWhiteKnights++;
+                    } else {
+                        numBlackKnights++;
+                    }
+                } else if (dynamic_cast<Bishop*>(chessBoard[i][j]) != nullptr) {
+                    if (chessBoard[i][j]->getColor()) {
+                        numWhiteBishops++;
+                    } else {
+                        numBlackBishops++;
+                    }
+                }
+                else if (dynamic_cast<King*>(chessBoard[i][j]) != nullptr) {
+                    // Kings are not counted for insufficient material
+
+                } else {
+                    // If any other piece is present, it's not insufficient material
+                    return;
+                }
+            }
+        }
+    }
+    if (numWhiteKnights + numWhiteBishops + numBlackKnights + numBlackBishops > 1) {
+        isInsufficientMaterial = false;
+    }
+
+    else {
+        isInsufficientMaterial = true;
+    }
+
+}
+
+/**
+ * Check if the game is drawn due to insufficient material or by repetition.
+ * @return true if the game is drawn, false otherwise
+ */
+bool ChessBoard::getDrawnGame() const {
+    return isGameDrawn || isInsufficientMaterial;
+}
+
+/**
+ * Get the current state of the chessboard as a string.
+ * @return The string representation of the chessboard
+ */
+string ChessBoard::getBoardString() const {
+    string boardString;
+    for (int i = 0; i < 8; ++i) {
+        for (int j = 0; j < 8; ++j) {
+            if (chessBoard[i][j] != nullptr) {
+                boardString += chessBoard[i][j]->getPieceName();
+            } else {
+                boardString += '#';
+            }
+        }
+    }
+    return boardString;
+}
+
+
+/**
  * Get the current turn of the chessboard.
  * @return true if it is white's turn, false if it is black
  */
@@ -828,7 +921,6 @@ string ChessBoard::Move::getMoveString() const {
 
 }
 
-
 void ChessBoard::Move::setValue(const int value) {
     this->moveValue = value;
 }
@@ -836,7 +928,6 @@ void ChessBoard::Move::setValue(const int value) {
 void ChessBoard::Move::setCapturedPiece(Piece* capturedPiece) {
     this->pieceCaptured = capturedPiece;
 }
-
 
 
 ostream& operator<<(ostream& os, const ChessBoard::Move& move) {

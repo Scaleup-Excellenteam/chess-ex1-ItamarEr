@@ -11,6 +11,7 @@
 #include <string>
 #include <thread>
 #include <mutex>
+#include <map>
 #include "Piece.h"
 #include "PriorityQueue.h"
 
@@ -80,6 +81,9 @@ public:
     void updatePriorityQueue();
     void initThreadPool(int numThreads);
     void waitForThreads();
+    void checkInsufficientMaterial();
+    bool getDrawnGame() const;
+    string getBoardString() const;
     ~ChessBoard();
 
 private:
@@ -91,6 +95,10 @@ private:
     int threadsCompleted;
     condition_variable threadCondition;
     int numThreads;
+    int fiftyMoveRuleCounter;
+    bool isGameDrawn;
+    bool isInsufficientMaterial;
+    map <string, int > boardRepetition;
 };
 
 
